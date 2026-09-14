@@ -8,7 +8,9 @@ effect through the vyogo_probe app's API. Needs kubectl (+ a kubeconfig) and cur
 
 Each phase prints PASS/FAIL with what it observed; exit code is non-zero if any fail.
 """
-import argparse, hashlib, json, os, secrets, subprocess, sys, time, urllib.parse
+import argparse, functools, hashlib, json, os, secrets, subprocess, sys, time, urllib.parse
+
+print = functools.partial(print, flush=True)  # progress must show while phases run
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DONE = {"Ready", "Succeeded", "Completed", "Active", "Normal", "Scheduled"}
@@ -243,7 +245,7 @@ class Probe:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--namespace", default="probe"); ap.add_argument("--bench", default="probe"); ap.add_argument("--site", default="probe")
+    ap.add_argument("--namespace", default="probe"); ap.add_argument("--bench", default="probe-bench"); ap.add_argument("--site", default="probe")
     ap.add_argument("--domain", required=True, help="wildcard zone the site is published on, e.g. vyogo.cloud")
     ap.add_argument("--site-url", help="override https://<site>.<domain>")
     ap.add_argument("--edge-ip", help="curl --resolve every hostname to this IP (bypasses local DNS caches)")

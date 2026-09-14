@@ -11,6 +11,6 @@ spec:
   databaseBackupSource:
     localPath: ${BACKUP_DB_PATH}
   adminPasswordSecretRef:
-    name: ${SITE}-admin
+    name: ${SITE}-admin-password
     namespace: ${NAMESPACE}
   force: true
