@@ -67,7 +67,9 @@ after v5.2.1), the probe surfaced and drove the fixes for:
 The kind-based e2e (`.github/workflows/e2e.yml`, git and FPM legs) then added:
 
 - `autoMigrate` never ran on the FPM install path (the branch exited before the migrate step)
-- a SiteDomain declared with `tls: {enabled: false}` still got `force-ssl-redirect` and an Ingress TLS section, so every plain-HTTP alias request was a 308 (invisible behind Cloudflare, which speaks HTTPS to the client)
+- a SiteDomain declared with `tls: {enabled: false}` still got `force-ssl-redirect` and an Ingress TLS section, so every plain-HTTP alias request was a 308 (invisible behind Cloudflare, which speaks HTTPS to the client). Two layers: the controller treated any `tls` block as on, and `enabled` was a plain bool with `omitempty` + CRD default `true`, so the finalizer Update dropped the `false` and the API server set it back to `true` (now a `*bool`, finalizer added by Patch)
+
+Both legs pass 11/11 on release `08b0edc`.
 
 Keep running it after every operator change; a green table is the contract.
 
