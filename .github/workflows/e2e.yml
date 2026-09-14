@@ -91,5 +91,8 @@ jobs:
         run: |
           kubectl get frappebench,frappesite,siteapp,siteconfig,sitecron,sitemigration,sitebackup,siterestore,sitedomain -n probe -o wide || true
           kubectl get pods -A | grep -v Running || true
+          echo "== ingresses"; kubectl get ingress -A -o wide || true
+          echo "== alias host from the runner"; curl -sv --resolve probe-alias.probe.local:80:127.0.0.1 http://probe-alias.probe.local/api/method/vyogo_probe.api.echo_host 2>&1 | tail -15 || true
+          echo "== site dirs on the bench"; kubectl -n probe exec deploy/probe-bench-gunicorn -- ls -la /home/frappe/frappe-bench/sites/ || true
           kubectl -n frappe-operator-system logs -l control-plane=controller-manager --tail=300 || true
           for j in $(kubectl -n probe get jobs -o name); do echo "== $j"; kubectl -n probe logs "$j" --tail=60 || true; done

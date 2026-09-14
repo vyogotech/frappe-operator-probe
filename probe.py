@@ -250,8 +250,17 @@ class Probe:
     def p_domain(self):
         self.apply("95-domain.yaml")
         self.wait("sitedomain", f"{self.a.site}-alias", timeout=600)
-        r = self.until(lambda: (lambda x: x if x.get("message", {}).get("host", "").startswith(self.vars["ALIAS_HOST"]) else None)(
-            self.curl("/api/method/vyogo_probe.api.echo_host", host=self.vars["ALIAS_HOST"], auth=False)), 300, what="alias host routing")
+        last = {}
+
+        def probe_alias():
+            nonlocal last
+            last = self.curl("/api/method/vyogo_probe.api.echo_host", host=self.vars["ALIAS_HOST"], auth=False)
+            return last if last.get("message", {}).get("host", "").startswith(self.vars["ALIAS_HOST"]) else None
+
+        try:
+            r = self.until(probe_alias, 300, what="alias host routing")
+        except RuntimeError as e:
+            raise RuntimeError(f"{e}; last response from {self.vars['ALIAS_HOST']}: {json.dumps(last)[:300]}")
         return f"SiteDomain serves {r['message']['host']} for site {r['message']['site']}"
 
     def cleanup(self):
