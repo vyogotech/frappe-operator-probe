@@ -1,6 +1,14 @@
 # Exercise every frappe-operator CR on a kind cluster, installing vyogo_probe
 # from git and from its FPM package (GHCR OCI). This is the operator's
 # acceptance test; nothing here touches a real cluster.
+#
+# Three ways in:
+#   workflow_dispatch  run it by hand against a published operator image
+#   workflow_run       after "fpm package" republishes the probe app
+#   workflow_call      from frappe-operator's own CI (probe-e2e.yml), which
+#                      hands over the image it just built and its chart as
+#                      artifacts, so every operator change is tested here
+#                      before it merges.
 name: e2e (kind)
 
 on:
@@ -14,6 +22,27 @@ on:
         default: "sha-08b0edc"
       fpm_package:
         description: "FPM package to install in the fpm leg"
+        default: "vyogotech/vyogo_probe==0.1.1"
+  workflow_call:
+    inputs:
+      operator_ref:
+        description: "frappe-operator git ref to install the chart from (ignored when operator_chart_artifact is set)"
+        type: string
+        default: "release"
+      operator_image_tag:
+        description: "operator image tag; with operator_image_artifact it is the tag inside the tarball"
+        type: string
+        default: "sha-08b0edc"
+      operator_image_artifact:
+        description: "artifact (from the calling run) holding a `docker save` tarball of the operator image; loaded into kind instead of pulled"
+        type: string
+        default: ""
+      operator_chart_artifact:
+        description: "artifact (from the calling run) holding helm/frappe-operator; used instead of checking the operator out"
+        type: string
+        default: ""
+      fpm_package:
+        type: string
         default: "vyogotech/vyogo_probe==0.1.1"
   workflow_run:
     workflows: ["fpm package"]
@@ -32,22 +61,50 @@ jobs:
       matrix:
         source: [git, fpm]
     env:
-      OPERATOR_REF: ${{ github.event.inputs.operator_ref || 'release' }}
-      OPERATOR_TAG: ${{ github.event.inputs.operator_image_tag || 'sha-08b0edc' }}
-      FPM_PACKAGE: ${{ github.event.inputs.fpm_package || 'vyogotech/vyogo_probe==0.1.1' }}
+      # `inputs` covers workflow_dispatch and workflow_call alike; workflow_run
+      # has none and takes the defaults.
+      OPERATOR_REF: ${{ inputs.operator_ref || 'release' }}
+      OPERATOR_TAG: ${{ inputs.operator_image_tag || 'sha-08b0edc' }}
+      FPM_PACKAGE: ${{ inputs.fpm_package || 'vyogotech/vyogo_probe==0.1.1' }}
+      IMAGE_ARTIFACT: ${{ inputs.operator_image_artifact || '' }}
+      CHART_ARTIFACT: ${{ inputs.operator_chart_artifact || '' }}
     steps:
+      # Explicit repository: when called from frappe-operator, the default
+      # checkout would be the caller's repo.
       - uses: actions/checkout@v4
+        with:
+          repository: vyogotech/frappe-operator-probe
+          ref: ${{ github.repository == 'vyogotech/frappe-operator-probe' && github.ref || 'main' }}
       - name: Checkout frappe-operator (${{ env.OPERATOR_REF }})
+        if: env.CHART_ARTIFACT == ''
         uses: actions/checkout@v4
         with:
           repository: vyogotech/frappe-operator
           ref: ${{ env.OPERATOR_REF }}
           path: operator
+      - name: Operator chart from the calling run (${{ env.CHART_ARTIFACT }})
+        if: env.CHART_ARTIFACT != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.CHART_ARTIFACT }}
+          path: operator/helm/frappe-operator
       - name: Kind cluster (ports 80/443 published)
         uses: helm/kind-action@v1.10.0
         with:
           cluster_name: probe
           config: ci/kind.yaml
+      - name: Operator image from the calling run (${{ env.IMAGE_ARTIFACT }})
+        if: env.IMAGE_ARTIFACT != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.IMAGE_ARTIFACT }}
+          path: /tmp/operator-image
+      - name: Load that image into kind
+        if: env.IMAGE_ARTIFACT != ''
+        run: |
+          docker load -i /tmp/operator-image/*.tar
+          docker image inspect "ghcr.io/vyogotech/frappe-operator:${OPERATOR_TAG}" >/dev/null
+          kind load docker-image "ghcr.io/vyogotech/frappe-operator:${OPERATOR_TAG}" --name probe
       - uses: azure/setup-helm@v4
       - name: ingress-nginx (kind flavour)
         run: |
