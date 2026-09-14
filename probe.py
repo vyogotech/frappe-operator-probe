@@ -232,7 +232,18 @@ class Probe:
         return f"SiteDomain serves {r['message']['host']} for site {r['message']['site']}"
 
     def cleanup(self):
-        sh(*self.kc, "delete", "namespace", self.a.namespace, "--wait=false", check=False)
+        sh(*self.kc, "delete", "namespace", self.a.namespace, "--wait=true", "--timeout=600s", check=False)
+        # A Retain storage class leaves the bench volume behind as a Released PV
+        # (and, on Longhorn, a Volume CR); they keep counting against capacity.
+        out = sh(*self.kc, "get", "pv", "-o", "json", check=False)
+        items = json.loads(out).get("items", []) if out.strip().startswith("{") else []
+        for pv in items:
+            ref = pv["spec"].get("claimRef") or {}
+            if pv.get("status", {}).get("phase") == "Released" and ref.get("namespace") == self.a.namespace:
+                name = pv["metadata"]["name"]
+                sh(*self.kc, "delete", "pv", name, "--timeout=60s", check=False)
+                sh(*self.kc, "-n", "longhorn-system", "delete", "volumes.longhorn.io", name, "--timeout=60s", check=False)
+                print("removed leftover volume " + name)
 
     def run(self):
         print(f"run {self.run_id}: ns={self.a.namespace} site={self.vars['SITE_HOST']} url={self.vars['SITE_URL']}")
