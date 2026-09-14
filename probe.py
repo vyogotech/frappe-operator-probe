@@ -133,6 +133,14 @@ class Probe:
         r = self.until(lambda: self.curl("/api/method/ping", auth=False).get("message") == "pong", 300, what="public ping")
         return f"site Ready, {self.vars['SITE_URL']} answers"
 
+    def load_token(self):
+        """Reuse the SiteAPIKey Secret of an existing site (when --only skips 'access')."""
+        import base64
+        sec = self.get("secret", f"{self.a.site}-admin-api-key").get("data")
+        if sec:
+            self.token = base64.b64decode(sec["api_key"]).decode() + ":" + base64.b64decode(sec["api_secret"]).decode()
+        return bool(sec)
+
     def p_access(self):
         self.apply("50-role-user-apikey.yaml")
         for kind, n in (("siterole", f"{self.a.site}-probe-operator"), ("siteuser", f"{self.a.site}-probe-user"), ("siteapikey", f"{self.a.site}-admin-key")):
@@ -250,6 +258,8 @@ class Probe:
 
     def run(self):
         print(f"run {self.run_id}: ns={self.a.namespace} site={self.vars['SITE_HOST']} url={self.vars['SITE_URL']}")
+        if self.a.only and "access" not in self.a.only and self.load_token():
+            print("using the existing SiteAPIKey token")
         for name, fn in (("bench", self.p_bench), ("site", self.p_site), ("access", self.p_access), ("siteapp", self.p_siteapp),
                          ("config", self.p_config), ("content", self.p_content), ("seed", self.p_seed), ("cron", self.p_cron),
                          ("migration", self.p_migration), ("backup", self.p_backup_restore), ("domain", self.p_domain)):
