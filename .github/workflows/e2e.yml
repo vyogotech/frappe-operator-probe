@@ -11,7 +11,7 @@ on:
         default: "release"
       operator_image_tag:
         description: "operator image tag (ghcr.io/vyogotech/frappe-operator)"
-        default: "sha-08f26db"
+        default: "sha-08b0edc"
       fpm_package:
         description: "FPM package to install in the fpm leg"
         default: "vyogotech/vyogo_probe==0.1.1"
@@ -33,7 +33,7 @@ jobs:
         source: [git, fpm]
     env:
       OPERATOR_REF: ${{ github.event.inputs.operator_ref || 'release' }}
-      OPERATOR_TAG: ${{ github.event.inputs.operator_image_tag || 'sha-08f26db' }}
+      OPERATOR_TAG: ${{ github.event.inputs.operator_image_tag || 'sha-08b0edc' }}
       FPM_PACKAGE: ${{ github.event.inputs.fpm_package || 'vyogotech/vyogo_probe==0.1.1' }}
     steps:
       - uses: actions/checkout@v4
