@@ -149,8 +149,10 @@ class Probe:
         self.wait("siteapp", f"{self.a.site}-vyogo-probe", timeout=1200)
         s = self.until(lambda: (lambda st: st if "vyogo_probe" in st["installed_apps"] else None)(self.status()), 120, what="app in installed_apps")
         k = s["records"]["by_kind"]
-        assert k.get("patch", 0) >= 1, f"patch marker missing: {k}"
-        return f"vyogo_probe {s['app']['version']} installed; patch ran (records={k})"
+        # autoMigrate (default) runs `bench migrate` after install: after_migrate leaves a record.
+        # (patches are recorded as executed by install-app itself, so no "patch" record here)
+        assert k.get("migrate", 0) >= 1, f"autoMigrate did not run migrate: {k}"
+        return f"vyogo_probe {s['app']['version']} installed, autoMigrate ran (records={k})"
 
     def p_config(self):
         self.apply("40-siteconfig.yaml")
@@ -159,7 +161,8 @@ class Probe:
         want = hashlib.sha256(self.vars["PROBE_SECRET"].encode()).hexdigest()
         assert s["probe_marker"] == self.vars["PROBE_MARKER"], s
         assert s["probe_secret_sha256"] == want, "secretConfig value differs"
-        assert s["server_script_enabled"] and int(s["max_file_size"] or 0) == 10485760, s
+        assert int(s["max_file_size"] or 0) == 10485760, s
+        assert s["server_script_enabled"], "server_script_enabled must come from the bench's commonSiteConfig"
         return f"customConfig + secretConfig + maxFileSize applied ({s['probe_keys']})"
 
     def p_content(self):

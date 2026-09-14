@@ -6,10 +6,10 @@ each one actually did its job.
 
 | CR | What the probe checks |
 |---|---|
-| FrappeBench | reaches Ready with git installs enabled |
+| FrappeBench | reaches Ready with git installs enabled and `commonSiteConfig` (server scripts on) |
 | FrappeSite | reaches Ready and answers `/api/method/ping` on its public host |
 | SiteRole / SiteUser / SiteAPIKey | role exists, user carries it, API key Secret authenticates as Administrator |
-| SiteApp | `vyogo_probe` installed from git; its patch left a `patch` record (migrate ran) |
+| SiteApp | `vyogo_probe` installed from git; `autoMigrate` ran migrate (an `after_migrate` record appears) |
 | SiteConfig | `customConfig` marker, `secretConfig` value (compared by sha256), `maxFileSize` all in `site_config.json` |
 | SiteCustomField / SitePropertySetter | field `probe_extra` on Probe Record; `title` made required |
 | SiteServerScript | a Before Insert script stamps every inserted record |

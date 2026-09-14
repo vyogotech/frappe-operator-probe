@@ -13,6 +13,9 @@ spec:
   storageSize: ${STORAGE_SIZE}
   gitConfig:
     enabled: true
+  # Server Scripts can only be switched on bench-wide (common_site_config.json).
+  commonSiteConfig:
+    server_script_enabled: "1"
   dbConfig:
     provider: mariadb
     mode: shared
