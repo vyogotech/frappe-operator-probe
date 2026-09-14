@@ -212,6 +212,9 @@ class Probe:
 
     def p_backup_restore(self):
         chk = self.call("vyogo_probe.api.checksum")
+        if chk["count"] != 25:  # re-run on an existing site: start from a known set
+            self.call("vyogo_probe.api.wipe", kind="seed")
+            chk = self.call("vyogo_probe.api.seed", count=25)["checksum"]
         assert chk["count"] == 25, chk
         path = f"sites/{self.vars['SITE_HOST']}/private/backups/{self.run_id}/database.sql.gz"
         self.apply("80-backup.yaml", {"BACKUP_DB_PATH": path})
