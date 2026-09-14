@@ -173,7 +173,7 @@ class Probe:
         assert any(p["field"] == "title" and p["property"] == "reqd" and str(p["value"]) == "1" for p in s["property_setters"]), s["property_setters"]
         assert s["server_scripts"] and not s["server_scripts"][0]["disabled"], s["server_scripts"]
         assert s["client_scripts"], "client script missing"
-        assert any(w["webhook_docevent"] == "after_insert" and w["enabled"] for w in s["webhooks"]), s["webhooks"]
+        assert any(w["webhook_docevent"] == "on_update" and w["enabled"] for w in s["webhooks"]), s["webhooks"]
         assert s["roles"]["Probe Operator"], "role missing"
         u = f"probe-user@{self.vars['SITE_HOST']}"
         assert "Probe Operator" in s["users"].get(u, []), s["users"]

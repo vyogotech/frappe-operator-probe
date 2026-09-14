@@ -63,7 +63,8 @@ spec:
   siteRef:
     name: ${SITE}
   webhookDoctype: Probe Record
-  webhookEvent: after_insert
+  # on_update fires after insert as well; after_insert is not an operator-accepted value
+  webhookEvent: on_update
   requestUrl: ${SITE_URL}/api/method/vyogo_probe.api.webhook_sink
   requestStructure: JSON
   enabled: true
