@@ -157,9 +157,11 @@ class Probe:
     def p_config(self):
         self.apply("40-siteconfig.yaml")
         self.wait("siteconfig", self.a.site, timeout=600)
-        s = self.status()["config"]
         want = hashlib.sha256(self.vars["PROBE_SECRET"].encode()).hexdigest()
-        assert s["probe_marker"] == self.vars["PROBE_MARKER"], s
+        # The apply Job writes site_config.json on the shared (RWX) volume; the
+        # serving pods on other nodes may see the new file a little later.
+        s = self.until(lambda: (lambda c: c if c.get("probe_marker") == self.vars["PROBE_MARKER"] else None)(self.status()["config"]),
+                       180, what="site_config keys visible to the serving pods")
         assert s["probe_secret_sha256"] == want, "secretConfig value differs"
         assert int(s["max_file_size"] or 0) == 10485760, s
         assert s["server_script_enabled"], "server_script_enabled must come from the bench's commonSiteConfig"
