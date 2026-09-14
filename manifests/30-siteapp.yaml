@@ -1,0 +1,13 @@
+apiVersion: vyogo.tech/v1
+kind: SiteApp
+metadata:
+  name: ${SITE}-vyogo-probe
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  appName: vyogo_probe
+  gitRepo: ${PROBE_REPO}
+  gitBranch: ${PROBE_BRANCH}
+  autoMigrate: true
+  backupBeforeInstall: false

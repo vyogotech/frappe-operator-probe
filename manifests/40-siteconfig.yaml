@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${SITE}-probe-secret
+  namespace: ${NAMESPACE}
+type: Opaque
+stringData:
+  value: ${PROBE_SECRET}
+---
+apiVersion: vyogo.tech/v1
+kind: SiteConfig
+metadata:
+  name: ${SITE}
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  maxFileSize: 10485760
+  customConfig:
+    probe_marker: "${PROBE_MARKER}"
+    # SiteServerScript needs this or Frappe refuses to run any Server Script.
+    server_script_enabled: "1"
+  secretConfig:
+    - key: probe_secret
+      secretKeyRef: { name: ${SITE}-probe-secret, key: value }

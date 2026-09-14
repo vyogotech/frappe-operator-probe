@@ -1,0 +1,11 @@
+apiVersion: vyogo.tech/v1
+kind: SiteCron
+metadata:
+  name: ${SITE}-tick
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  schedule: "*/2 * * * *"
+  method: vyogo_probe.tasks.tick
+  timeoutSeconds: 300

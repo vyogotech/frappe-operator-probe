@@ -1,0 +1,82 @@
+apiVersion: vyogo.tech/v1
+kind: SiteCustomField
+metadata:
+  name: ${SITE}-probe-extra
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  dt: Probe Record
+  fieldname: probe_extra
+  label: Probe Extra
+  fieldtype: Data
+  insertAfter: note
+---
+apiVersion: vyogo.tech/v1
+kind: SitePropertySetter
+metadata:
+  name: ${SITE}-title-reqd
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  docType: Probe Record
+  fieldName: title
+  property: reqd
+  propertyType: Check
+  value: "1"
+---
+apiVersion: vyogo.tech/v1
+kind: SiteServerScript
+metadata:
+  name: ${SITE}-mark-inserts
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  scriptType: DocType Event
+  referenceDocType: Probe Record
+  eventType: Before Insert
+  script: |
+    doc.note = "server-script"
+  disabled: false
+---
+apiVersion: vyogo.tech/v1
+kind: SiteClientScript
+metadata:
+  name: ${SITE}-list-banner
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  dt: Probe Record
+  script: |
+    frappe.ui.form.on("Probe Record", { refresh(frm) { frm.dashboard.set_headline("vyogo_probe client script"); } });
+  enabled: true
+---
+apiVersion: vyogo.tech/v1
+kind: SiteWebhook
+metadata:
+  name: ${SITE}-on-insert
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  webhookDoctype: Probe Record
+  webhookEvent: after_insert
+  requestUrl: ${SITE_URL}/api/method/vyogo_probe.api.webhook_sink
+  requestStructure: JSON
+  enabled: true
+---
+apiVersion: vyogo.tech/v1
+kind: SiteQuota
+metadata:
+  name: ${SITE}-quota
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  maxDbSizeMb: 2048
+  maxStorageMb: 4096
+  maxUsers: 10
+  actionOnExceeded: Warn

@@ -1,0 +1,12 @@
+apiVersion: vyogo.tech/v1
+kind: SiteDomain
+metadata:
+  name: ${SITE}-alias
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  domain: ${ALIAS_HOST}
+  tls:
+    enabled: false
+  redirectPrimary: false

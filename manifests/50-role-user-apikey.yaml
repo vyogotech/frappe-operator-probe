@@ -1,0 +1,38 @@
+apiVersion: vyogo.tech/v1
+kind: SiteRole
+metadata:
+  name: ${SITE}-probe-operator
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  roleName: Probe Operator
+  deskAccess: true
+---
+apiVersion: vyogo.tech/v1
+kind: SiteUser
+metadata:
+  name: ${SITE}-probe-user
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  email: probe-user@${SITE_HOST}
+  firstName: Probe
+  lastName: User
+  userType: System User
+  sendPasswordReset: false
+  roles:
+    - Probe Operator
+---
+# API key for Administrator: the runner authenticates with it.
+apiVersion: vyogo.tech/v1
+kind: SiteAPIKey
+metadata:
+  name: ${SITE}-admin-key
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  user: Administrator
+  secretName: ${SITE}-admin-api-key

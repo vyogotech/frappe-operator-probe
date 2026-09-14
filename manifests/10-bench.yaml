@@ -1,0 +1,21 @@
+# A small dedicated bench with git installs enabled, so the probe app can be
+# pulled straight from its repo by a SiteApp (no registry needed).
+apiVersion: vyogo.tech/v1
+kind: FrappeBench
+metadata:
+  name: ${BENCH}
+  namespace: ${NAMESPACE}
+spec:
+  frappeVersion: "${FRAPPE_VERSION}"
+  imageConfig:
+    repository: ${BENCH_IMAGE_REPO}
+    tag: ${BENCH_IMAGE_TAG}
+  storageSize: ${STORAGE_SIZE}
+  gitConfig:
+    enabled: true
+  dbConfig:
+    provider: mariadb
+    mode: shared
+    mariadbRef:
+      name: ${MARIADB_NAME}
+      namespace: ${MARIADB_NAMESPACE}

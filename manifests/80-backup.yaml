@@ -1,0 +1,9 @@
+apiVersion: vyogo.tech/v1
+kind: SiteBackup
+metadata:
+  name: ${SITE}-backup-${RUN_ID}
+  namespace: ${NAMESPACE}
+spec:
+  site: ${SITE_HOST}
+  withFiles: true
+  compress: true

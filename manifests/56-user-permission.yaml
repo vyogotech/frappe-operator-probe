@@ -1,0 +1,13 @@
+# Rendered after seeding: ${SEED_RECORD} is a Probe Record name that exists.
+apiVersion: vyogo.tech/v1
+kind: SiteUserPermission
+metadata:
+  name: ${SITE}-probe-user-scope
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  user: probe-user@${SITE_HOST}
+  allow: Probe Record
+  forValue: ${SEED_RECORD}
+  applyToAllDoctypes: true

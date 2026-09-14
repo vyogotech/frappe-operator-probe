@@ -1,0 +1,9 @@
+apiVersion: vyogo.tech/v1
+kind: SiteMigration
+metadata:
+  name: ${SITE}-migrate-${RUN_ID}
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  backupBeforeMigrate: false
