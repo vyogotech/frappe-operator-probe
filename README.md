@@ -47,3 +47,22 @@ migrate | heartbeat | webhook | manual), and these endpoints:
 
 Hooks: `after_migrate` and a one-time patch (SiteMigration), an hourly
 scheduler event, `doc_events` on Probe Record.
+
+## What it has found so far
+
+Run against the vyogo.cloud hub on 2026-09-14 (frappe-operator release branch,
+after v5.2.1), the probe surfaced and drove the fixes for:
+
+- a FrappeSite named like its FrappeBench reused the bench's init Job and was Ready without ever being created
+- six content controllers required a `<site>-admin-password` Secret instead of the site's `adminPasswordSecretRef`
+- SiteAPIKey wrote placeholder credentials and never called Frappe
+- Client Script and Webhook creates lacked the document name; the webhook event went into a field Frappe ignores
+- SiteApp `autoMigrate` was accepted and ignored; `backupBeforeInstall: false` could not be expressed
+- site Jobs rewrote `apps.txt` from the image, so `bench migrate` deleted a SiteApp-installed app's DocTypes as orphans
+- finalizers looped forever once the namespace was terminating
+- SiteUserPermission failed with a duplicate on every re-reconcile (hash-named document)
+- SiteRestore ignored a missing `benchRef.namespace` and could not read a cross-namespace MariaDB root Secret
+- no way to enable Server Scripts on an operator-made bench (now `FrappeBench.spec.commonSiteConfig`)
+
+Keep running it after every operator change; a green table is the contract.
+
