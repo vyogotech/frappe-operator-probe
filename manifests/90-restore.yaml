@@ -12,4 +12,5 @@ spec:
     localPath: ${BACKUP_DB_PATH}
   adminPasswordSecretRef:
     name: ${SITE}-admin-password
+    key: password
   force: true
