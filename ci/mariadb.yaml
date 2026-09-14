@@ -1,0 +1,30 @@
+# Shared MariaDB for the CI cluster, managed by the mariadb-operator the
+# frappe-operator chart installs. Lives in the operator namespace so the
+# probe's cross-namespace mariadbRef path is exercised too.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: frappe-mariadb-root
+  namespace: frappe-operator-system
+type: Opaque
+stringData:
+  password: ci-root-password
+---
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: MariaDB
+metadata:
+  name: frappe-mariadb
+  namespace: frappe-operator-system
+spec:
+  rootPasswordSecretKeyRef:
+    name: frappe-mariadb-root
+    key: password
+  image: mariadb:10.11
+  replicas: 1
+  storage:
+    size: 5Gi
+  myCnf: |
+    [mariadb]
+    max_connections=200
+    character-set-server=utf8mb4
+    collation-server=utf8mb4_unicode_ci

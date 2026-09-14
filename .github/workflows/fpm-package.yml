@@ -1,0 +1,71 @@
+# Package vyogo_probe with fpm and publish it as an OCI artifact on GHCR
+# (ghcr.io/vyogotech/fpm -> package vyogotech/vyogo_probe==<version>), the
+# same registry layout the operator's SiteApp installs from with
+# fpmRepoType: oci. The e2e workflow then installs exactly this package.
+name: fpm package
+
+on:
+  push:
+    branches: [main]
+    paths: ["vyogo_probe/**", "pyproject.toml", ".github/workflows/fpm-package.yml"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Package version (default: vyogo_probe.__version__)"
+        required: false
+      fpm_version:
+        description: "fpm CLI release"
+        required: false
+        default: "v4.3.1"
+
+env:
+  FPM_VERSION: ${{ github.event.inputs.fpm_version || 'v4.3.1' }}
+  OCI_REPO: ghcr.io/${{ github.repository_owner }}/fpm
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install fpm
+        run: |
+          curl -fsSL -o /usr/local/bin/fpm "https://github.com/vyogotech/fpm/releases/download/${FPM_VERSION}/fpm-linux-amd64"
+          chmod +x /usr/local/bin/fpm
+          fpm --version
+      - name: Version
+        id: ver
+        run: |
+          v="${{ github.event.inputs.version }}"
+          [ -n "$v" ] || v=$(python3 -c "import re; print(re.search(r'__version__ = \"([^\"]+)\"', open('vyogo_probe/__init__.py').read()).group(1))")
+          echo "version=$v" >> "$GITHUB_OUTPUT"; echo "packaging vyogo_probe $v"
+      - name: Package
+        run: |
+          fpm package . --org vyogotech --app-name vyogo_probe --version "${{ steps.ver.outputs.version }}" \
+            --platform manylinux2014_x86_64 --python-version 3.14 \
+            -o out --overwrite --skip-local-install
+          ls -la out
+          python3 - <<'PY'
+          import glob, zipfile
+          f = glob.glob("out/*.fpm")[0]; z = zipfile.ZipFile(f); names = z.namelist()
+          print(f, len(names), "entries")
+          assert any(n.endswith("hooks.py") for n in names), "hooks.py missing from package"
+          PY
+      - name: Publish to GHCR (OCI)
+        env:
+          FPM_REPO_GHCR_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          fpm repo add ghcr "${OCI_REPO}" --type oci --username "${{ github.actor }}"
+          fpm publish --from-file out/*.fpm --repo ghcr --force
+          echo "published vyogotech/vyogo_probe==${{ steps.ver.outputs.version }} to ${OCI_REPO}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vyogo_probe-fpm
+          path: out/*.fpm

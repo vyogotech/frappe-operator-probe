@@ -153,14 +153,26 @@ class Probe:
         return "SiteRole + SiteUser Ready, SiteAPIKey works (Administrator)"
 
     def p_siteapp(self):
-        self.apply("30-siteapp.yaml")
+        if self.a.app_source == "fpm":
+            if self.a.fpm_username and self.a.fpm_token:
+                # the operator reads this Secret (optional) into the install Job as FPM_USERNAME/FPM_TOKEN
+                yaml = sh(*self.kc, "-n", self.a.namespace, "create", "secret", "generic", "fpm-registry-auth",
+                          f"--from-literal=username={self.a.fpm_username}", f"--from-literal=token={self.a.fpm_token}",
+                          "--dry-run=client", "-o", "yaml")
+                sh(*self.kc, "apply", "-f", "-", input=yaml)
+            self.apply("31-siteapp-fpm.yaml", {"FPM_PACKAGE": self.a.fpm_package, "FPM_REPO": self.a.fpm_repo, "FPM_REPO_TYPE": self.a.fpm_repo_type})
+        else:
+            self.apply("30-siteapp.yaml")
         self.wait("siteapp", f"{self.a.site}-vyogo-probe", timeout=1200)
         s = self.until(lambda: (lambda st: st if "vyogo_probe" in st["installed_apps"] else None)(self.status()), 120, what="app in installed_apps")
+        if self.a.app_source == "fpm" and "==" in self.a.fpm_package:
+            want = self.a.fpm_package.split("==", 1)[1]
+            assert s["app"]["version"] == want, f"installed {s['app']['version']}, package says {want}"
         k = s["records"]["by_kind"]
         # autoMigrate (default) runs `bench migrate` after install: after_migrate leaves a record.
         # (patches are recorded as executed by install-app itself, so no "patch" record here)
         assert k.get("migrate", 0) >= 1, f"autoMigrate did not run migrate: {k}"
-        return f"vyogo_probe {s['app']['version']} installed, autoMigrate ran (records={k})"
+        return f"vyogo_probe {s['app']['version']} installed from {self.a.app_source}, autoMigrate ran (records={k})"
 
     def p_config(self):
         self.apply("40-siteconfig.yaml")
@@ -282,6 +294,10 @@ def main():
     ap.add_argument("--frappe-version", default="16"); ap.add_argument("--bench-image", default="ghcr.io/vyogotech/frappe-for-operator:version-16")
     ap.add_argument("--storage-size", default="5Gi"); ap.add_argument("--ingress-class", default="nginx")
     ap.add_argument("--probe-repo", default="https://github.com/vyogotech/frappe-operator-probe"); ap.add_argument("--probe-branch", default="main")
+    ap.add_argument("--app-source", choices=["git", "fpm"], default="git", help="how SiteApp installs vyogo_probe")
+    ap.add_argument("--fpm-package", default="vyogotech/vyogo_probe", help="e.g. vyogotech/vyogo_probe==0.1.1")
+    ap.add_argument("--fpm-repo", default="ghcr.io/vyogotech/fpm"); ap.add_argument("--fpm-repo-type", choices=["oci", "http"], default="oci")
+    ap.add_argument("--fpm-username", default=os.environ.get("FPM_USERNAME")); ap.add_argument("--fpm-token", default=os.environ.get("FPM_TOKEN"))
     ap.add_argument("--admin-password"); ap.add_argument("--run-id"); ap.add_argument("--kubeconfig")
     ap.add_argument("--only", type=lambda s: set(s.split(",")), help="comma list of phases")
     ap.add_argument("--keep-going", action="store_true", help="continue after a failed phase")

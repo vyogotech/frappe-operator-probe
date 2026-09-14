@@ -1,0 +1,95 @@
+# Exercise every frappe-operator CR on a kind cluster, installing vyogo_probe
+# from git and from its FPM package (GHCR OCI). This is the operator's
+# acceptance test; nothing here touches a real cluster.
+name: e2e (kind)
+
+on:
+  workflow_dispatch:
+    inputs:
+      operator_ref:
+        description: "frappe-operator git ref to install the chart from"
+        default: "release"
+      operator_image_tag:
+        description: "operator image tag (ghcr.io/vyogotech/frappe-operator)"
+        default: "sha-7e99a6f"
+      fpm_package:
+        description: "FPM package to install in the fpm leg"
+        default: "vyogotech/vyogo_probe==0.1.1"
+  workflow_run:
+    workflows: ["fpm package"]
+    types: [completed]
+
+jobs:
+  probe:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [git, fpm]
+    env:
+      OPERATOR_REF: ${{ github.event.inputs.operator_ref || 'release' }}
+      OPERATOR_TAG: ${{ github.event.inputs.operator_image_tag || 'sha-7e99a6f' }}
+      FPM_PACKAGE: ${{ github.event.inputs.fpm_package || 'vyogotech/vyogo_probe==0.1.1' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout frappe-operator (${{ env.OPERATOR_REF }})
+        uses: actions/checkout@v4
+        with:
+          repository: vyogotech/frappe-operator
+          ref: ${{ env.OPERATOR_REF }}
+          path: operator
+      - name: Kind cluster (ports 80/443 published)
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: probe
+          config: ci/kind.yaml
+      - uses: azure/setup-helm@v4
+      - name: ingress-nginx (kind flavour)
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.1/deploy/static/provider/kind/deploy.yaml
+          kubectl -n ingress-nginx wait --for=condition=available deploy/ingress-nginx-controller --timeout=300s
+      - name: Resolve *.probe.local to ingress-nginx inside the cluster
+        run: |
+          # The site's own workers must reach the public hostnames (webhook target,
+          # domain alias); CoreDNS rewrites them to the ingress Service.
+          kubectl -n kube-system get cm coredns -o jsonpath='{.data.Corefile}' > Corefile
+          sed -i 's/^\.:53 {$/.:53 {\n    rewrite name regex (.*)\\.probe\\.local ingress-nginx-controller.ingress-nginx.svc.cluster.local answer auto/' Corefile
+          kubectl -n kube-system create configmap coredns --from-file=Corefile=Corefile --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n kube-system rollout restart deploy/coredns && kubectl -n kube-system rollout status deploy/coredns --timeout=120s
+      - name: Install frappe-operator ${{ env.OPERATOR_TAG }}
+        run: |
+          helm dependency update operator/helm/frappe-operator
+          helm upgrade --install frappe-operator operator/helm/frappe-operator \
+            --namespace frappe-operator-system --create-namespace \
+            --set mariadb-operator.enabled=true --set keda.enabled=false --set mariadb.enabled=false \
+            --set operator.image.tag=${OPERATOR_TAG} --set operator.image.pullPolicy=IfNotPresent \
+            --set operatorConfig.defaultDomainSuffix=.probe.local --set operatorConfig.gitEnabled=true
+          for d in $(kubectl -n frappe-operator-system get deploy -o name); do kubectl -n frappe-operator-system rollout status "$d" --timeout=300s; done
+      - name: MariaDB
+        run: |
+          kubectl apply -f ci/mariadb.yaml
+          for i in $(seq 1 60); do
+            st=$(kubectl -n frappe-operator-system get mariadb frappe-mariadb -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)
+            [ "$st" = "True" ] && break; sleep 5
+          done
+          kubectl -n frappe-operator-system get mariadb frappe-mariadb
+      - name: Run the probe (${{ matrix.source }})
+        env:
+          FPM_USERNAME: ${{ github.actor }}
+          FPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./probe.py --domain probe.local --site-url http://probe.probe.local --edge-ip 127.0.0.1 \
+            --mariadb-ref frappe-mariadb/frappe-operator-system --ingress-class nginx --storage-size 5Gi \
+            --app-source ${{ matrix.source }} --fpm-package "${FPM_PACKAGE}" --keep-going
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get frappebench,frappesite,siteapp,siteconfig,sitecron,sitemigration,sitebackup,siterestore,sitedomain -n probe -o wide || true
+          kubectl get pods -A | grep -v Running || true
+          kubectl -n frappe-operator-system logs -l control-plane=controller-manager --tail=300 || true
+          for j in $(kubectl -n probe get jobs -o name); do echo "== $j"; kubectl -n probe logs "$j" --tail=60 || true; done
