@@ -8,6 +8,7 @@ spec:
   site: ${SITE_HOST}
   benchRef:
     name: ${BENCH}
+    namespace: ${NAMESPACE}
   databaseBackupSource:
     localPath: ${BACKUP_DB_PATH}
   adminPasswordSecretRef:

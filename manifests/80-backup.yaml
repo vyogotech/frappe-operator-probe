@@ -7,3 +7,7 @@ spec:
   site: ${SITE_HOST}
   withFiles: true
   compress: true
+  # Where the DB dump lands (the operator relocates private/backups/ to
+  # private/vyogo-backups/ so Frappe's own backup rotation never removes it);
+  # the SiteRestore reads the same path back.
+  backupPathDB: ${BACKUP_DB_PATH}
