@@ -30,7 +30,7 @@ class Probe:
         self.run_id = a.run_id or time.strftime("%m%d%H%M")
         self.vars = {
             "NAMESPACE": a.namespace, "BENCH": a.bench, "SITE": a.site,
-            "SITE_HOST": f"{a.site}.{a.domain}", "ALIAS_HOST": f"{a.site}-alias.{a.domain}",
+            "SITE_HOST": f"{a.site}.{a.domain}", "SITE2_HOST": f"{a.site}-two.{a.domain}", "ALIAS_HOST": f"{a.site}-alias.{a.domain}",
             "SITE_URL": a.site_url or f"https://{a.site}.{a.domain}",
             "FRAPPE_VERSION": a.frappe_version, "BENCH_IMAGE_REPO": a.bench_image.rsplit(":", 1)[0],
             "BENCH_IMAGE_TAG": a.bench_image.rsplit(":", 1)[1], "STORAGE_SIZE": a.storage_size,
@@ -132,6 +132,18 @@ class Probe:
         self.wait("frappesite", self.a.site, timeout=1200)
         r = self.until(lambda: self.curl("/api/method/ping", auth=False).get("message") == "pong", 300, what="public ping")
         return f"site Ready, {self.vars['SITE_URL']} answers"
+
+    def p_site2(self):
+        """A second site on the bench after the app install (then deleted): the
+        site-init and site-delete Jobs must import the volume-installed app."""
+        self.apply("21-site2.yaml")
+        name = f"{self.a.site}-two"
+        self.wait("frappesite", name, timeout=1200)
+        self.until(lambda: self.curl("/api/method/ping", host=self.vars["SITE2_HOST"], auth=False).get("message") == "pong",
+                   300, what="second site public ping")
+        sh(*self.kc, "-n", self.a.namespace, "delete", "frappesite", name, "--wait=false")
+        self.until(lambda: not self.get("frappesite", name), 600, what="second site deletion (site-delete Job)")
+        return f"second site {self.vars['SITE2_HOST']} Ready and deleted with apps on the bench"
 
     def load_token(self):
         """Reuse the SiteAPIKey Secret of an existing site (when --only skips 'access')."""
@@ -281,7 +293,7 @@ class Probe:
         print(f"run {self.run_id}: ns={self.a.namespace} site={self.vars['SITE_HOST']} url={self.vars['SITE_URL']}")
         if self.a.only and "access" not in self.a.only and self.load_token():
             print("using the existing SiteAPIKey token")
-        for name, fn in (("bench", self.p_bench), ("site", self.p_site), ("access", self.p_access), ("siteapp", self.p_siteapp),
+        for name, fn in (("bench", self.p_bench), ("site", self.p_site), ("access", self.p_access), ("siteapp", self.p_siteapp), ("site2", self.p_site2),
                          ("config", self.p_config), ("content", self.p_content), ("seed", self.p_seed), ("cron", self.p_cron),
                          ("migration", self.p_migration), ("backup", self.p_backup_restore), ("domain", self.p_domain)):
             self.phase(name, fn)

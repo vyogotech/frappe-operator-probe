@@ -1,0 +1,30 @@
+# A SECOND site on the same bench, created AFTER the app install: once
+# sites/apps.txt lists a volume-installed app, every bench Job must be able
+# to import it. The site-init Job lacked the sites/apps import path and the
+# second site on a pooled bench failed with "No module named '<app>'".
+apiVersion: vyogo.tech/v1
+kind: FrappeSite
+metadata:
+  name: ${SITE}-two
+  namespace: ${NAMESPACE}
+spec:
+  benchRef:
+    name: ${BENCH}
+  siteName: ${SITE2_HOST}
+  domain: ${SITE2_HOST}
+  adminPasswordSecretRef:
+    name: ${SITE}-admin-password
+    namespace: ${NAMESPACE}
+  dbConfig:
+    provider: mariadb
+    mode: shared
+    mariadbRef:
+      name: ${MARIADB_NAME}
+      namespace: ${MARIADB_NAMESPACE}
+  ingressClassName: ${INGRESS_CLASS}
+  ingress:
+    enabled: true
+    className: ${INGRESS_CLASS}
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  deletionPolicy: Delete
