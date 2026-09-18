@@ -22,7 +22,7 @@ on:
         default: "v5.2.4"
       fpm_package:
         description: "FPM package to install in the fpm leg"
-        default: "vyogotech/vyogo_probe==0.1.1"
+        default: "vyogotech/vyogo_probe==0.1.2"
   workflow_call:
     inputs:
       operator_ref:
@@ -43,7 +43,7 @@ on:
         default: ""
       fpm_package:
         type: string
-        default: "vyogotech/vyogo_probe==0.1.1"
+        default: "vyogotech/vyogo_probe==0.1.2"
   workflow_run:
     workflows: ["fpm package"]
     types: [completed]
@@ -67,7 +67,7 @@ jobs:
       # has none and takes the defaults.
       OPERATOR_REF: ${{ inputs.operator_ref || 'release' }}
       OPERATOR_TAG: ${{ inputs.operator_image_tag || 'v5.2.4' }}
-      FPM_PACKAGE: ${{ inputs.fpm_package || 'vyogotech/vyogo_probe==0.1.1' }}
+      FPM_PACKAGE: ${{ inputs.fpm_package || 'vyogotech/vyogo_probe==0.1.2' }}
       IMAGE_ARTIFACT: ${{ inputs.operator_image_artifact || '' }}
       CHART_ARTIFACT: ${{ inputs.operator_chart_artifact || '' }}
     steps:

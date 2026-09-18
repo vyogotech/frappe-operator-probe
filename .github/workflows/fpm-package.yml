@@ -16,10 +16,10 @@ on:
       fpm_version:
         description: "fpm CLI release"
         required: false
-        default: "v4.3.1"
+        default: "v4.6.0"
 
 env:
-  FPM_VERSION: ${{ github.event.inputs.fpm_version || 'v4.3.1' }}
+  FPM_VERSION: ${{ github.event.inputs.fpm_version || 'v4.6.0' }}
   OCI_REPO: ghcr.io/${{ github.repository_owner }}/fpm
 
 jobs:

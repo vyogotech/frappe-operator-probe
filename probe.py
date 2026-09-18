@@ -191,11 +191,18 @@ class Probe:
         if self.a.app_source == "fpm" and "==" in self.a.fpm_package:
             want = self.a.fpm_package.split("==", 1)[1]
             assert s["app"]["version"] == want, f"installed {s['app']['version']}, package says {want}"
+        deps = s.get("deps") or {}
+        if self.a.app_source == "fpm":
+            # The package vendors `roman` (absent from the bench image). The install Job's own
+            # env having it proves nothing: the SERVING pod must import it, which on a bench
+            # whose apps live on the shared volume means the operator staged sites/apps/.pydeps.
+            r = deps.get("roman") or {}
+            assert r.get("ok"), f"serving pod cannot import the app's vendored dependency: {r}"
         k = s["records"]["by_kind"]
         # autoMigrate (default) runs `bench migrate` after install: after_migrate leaves a record.
         # (patches are recorded as executed by install-app itself, so no "patch" record here)
         assert k.get("migrate", 0) >= 1, f"autoMigrate did not run migrate: {k}"
-        return f"vyogo_probe {s['app']['version']} installed from {self.a.app_source}, autoMigrate ran (records={k})"
+        return f"vyogo_probe {s['app']['version']} installed from {self.a.app_source}, autoMigrate ran (records={k}), deps={deps}"
 
     def p_config(self):
         self.apply("40-siteconfig.yaml")

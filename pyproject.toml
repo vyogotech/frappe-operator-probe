@@ -5,7 +5,13 @@ description = "A tiny Frappe app that gives every frappe-operator CR something o
 requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]
-dependencies = []
+# One tiny pure-Python distribution the bench image does NOT ship. `fpm package`
+# vendors its wheel, and the operator must stage it where the SERVING pods can
+# import it (sites/apps/.pydeps on a shared bench): status()["deps"] reports it
+# and the fpm leg of the probe asserts on it. Without this the probe app had no
+# dependencies and the whole vendored-wheels path ran untested (operator 5.2.4's
+# rebuild_pydeps discarded every successful rebuild and nothing noticed).
+dependencies = ["roman>=4.0"]
 
 [build-system]
 requires = ["flit_core >=3.4,<4"]

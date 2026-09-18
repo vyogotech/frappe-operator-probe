@@ -19,6 +19,18 @@ def _require_manager():
         frappe.throw("System Manager required", frappe.PermissionError)
 
 
+def _deps():
+    """Whether THIS process (a serving pod) can import the app's vendored deps, and from where."""
+    out = {}
+    for mod in ("roman",):
+        try:
+            m = __import__(mod)
+            out[mod] = {"ok": True, "file": getattr(m, "__file__", None)}
+        except Exception as e:
+            out[mod] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    return out
+
+
 @frappe.whitelist()
 def status():
     """One dict with every observable the CR tests assert on."""
@@ -31,6 +43,7 @@ def status():
     meta = frappe.get_meta(DT)
     return {
         "app": {"name": "vyogo_probe", "version": __version__},
+        "deps": _deps(),
         "site": frappe.local.site,
         "now": str(now_datetime()),
         "installed_apps": frappe.get_installed_apps(),
