@@ -19,7 +19,7 @@ on:
         default: "release"
       operator_image_tag:
         description: "operator image tag (ghcr.io/vyogotech/frappe-operator)"
-        default: "v5.2.4"
+        default: "v5.2.6"
       fpm_package:
         description: "FPM package to install in the fpm leg"
         default: "vyogotech/vyogo_probe==0.1.2"
@@ -32,7 +32,7 @@ on:
       operator_image_tag:
         description: "operator image tag; with operator_image_artifact it is the tag inside the tarball"
         type: string
-        default: "v5.2.4"
+        default: "v5.2.6"
       operator_image_artifact:
         description: "artifact (from the calling run) holding a `docker save` tarball of the operator image; loaded into kind instead of pulled"
         type: string
@@ -66,7 +66,7 @@ jobs:
       # `inputs` covers workflow_dispatch and workflow_call alike; workflow_run
       # has none and takes the defaults.
       OPERATOR_REF: ${{ inputs.operator_ref || 'release' }}
-      OPERATOR_TAG: ${{ inputs.operator_image_tag || 'v5.2.4' }}
+      OPERATOR_TAG: ${{ inputs.operator_image_tag || 'v5.2.6' }}
       FPM_PACKAGE: ${{ inputs.fpm_package || 'vyogotech/vyogo_probe==0.1.2' }}
       IMAGE_ARTIFACT: ${{ inputs.operator_image_artifact || '' }}
       CHART_ARTIFACT: ${{ inputs.operator_chart_artifact || '' }}
