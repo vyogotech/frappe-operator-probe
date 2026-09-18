@@ -31,6 +31,7 @@ class Probe:
         self.vars = {
             "NAMESPACE": a.namespace, "BENCH": a.bench, "SITE": a.site,
             "SITE_HOST": f"{a.site}.{a.domain}", "SITE2_HOST": f"{a.site}-two.{a.domain}", "ALIAS_HOST": f"{a.site}-alias.{a.domain}",
+            "SITE2_APP": f"{a.site}-two-vyogo-probe",
             "SITE_URL": a.site_url or f"https://{a.site}.{a.domain}",
             "FRAPPE_VERSION": a.frappe_version, "BENCH_IMAGE_REPO": a.bench_image.rsplit(":", 1)[0],
             "BENCH_IMAGE_TAG": a.bench_image.rsplit(":", 1)[1], "STORAGE_SIZE": a.storage_size,
@@ -135,26 +136,44 @@ class Probe:
 
     def p_site2(self):
         """A second site on the bench after the app install (then deleted): the
-        site-init and site-delete Jobs must import the volume-installed app."""
+        site-init and site-delete Jobs must import the volume-installed app, and
+        deleting the site takes its SiteApps with it."""
         self.apply("21-site2.yaml")
         name = f"{self.a.site}-two"
         self.wait("frappesite", name, timeout=1200)
         self.until(lambda: self.curl("/api/method/ping", host=self.vars["SITE2_HOST"], auth=False).get("message") == "pong",
                    300, what="second site public ping")
+
+        def install(app):
+            if self.a.app_source == "fpm":
+                self.apply("33-siteapp-site2-fpm.yaml", {"SITE2_APP": app, "FPM_PACKAGE": self.a.fpm_package, "FPM_REPO": self.a.fpm_repo, "FPM_REPO_TYPE": self.a.fpm_repo_type})
+            else:
+                self.apply("32-siteapp-site2.yaml", {"SITE2_APP": app})
+            self.wait("siteapp", app, timeout=900)
+            self.until(lambda: self.curl("/api/method/vyogo_probe.api.echo_host", host=self.vars["SITE2_HOST"], auth=False).get("message", {}).get("site") == self.vars["SITE2_HOST"],
+                       300, what="probe app answering on the second site")
+
         # The same app on the second site: must reuse the shared-volume copy
         # (site-level install only) and come up serving the app's API.
-        if self.a.app_source == "fpm":
-            self.apply("33-siteapp-site2-fpm.yaml", {"FPM_PACKAGE": self.a.fpm_package, "FPM_REPO": self.a.fpm_repo, "FPM_REPO_TYPE": self.a.fpm_repo_type})
-        else:
-            self.apply("32-siteapp-site2.yaml")
-        self.wait("siteapp", f"{name}-vyogo-probe", timeout=900)
-        self.until(lambda: self.curl("/api/method/vyogo_probe.api.echo_host", host=self.vars["SITE2_HOST"], auth=False).get("message", {}).get("site") == self.vars["SITE2_HOST"],
-                   300, what="probe app answering on the second site")
-        sh(*self.kc, "-n", self.a.namespace, "delete", "siteapp", f"{name}-vyogo-probe", "--wait=false")
-        self.until(lambda: not self.get("siteapp", f"{name}-vyogo-probe"), 600, what="second site app uninstall")
+        app = self.vars["SITE2_APP"]
+        install(app)
+        sh(*self.kc, "-n", self.a.namespace, "delete", "siteapp", app, "--wait=false")
+        self.until(lambda: not self.get("siteapp", app), 600, what="second site app uninstall")
+
+        # Delete the site while a SiteApp still references it (what a console
+        # "delete site" does): the SiteApp must go with the site instead of sitting
+        # Pending on SiteNotFound forever (hub, 2026-09-18), and without an uninstall
+        # Job, which would race `bench drop-site`. A new CR name keeps the first
+        # SiteApp's finished Jobs out of the picture.
+        orphan = f"{app}-again"
+        install(orphan)
         sh(*self.kc, "-n", self.a.namespace, "delete", "frappesite", name, "--wait=false")
         self.until(lambda: not self.get("frappesite", name), 600, what="second site deletion (site-delete Job)")
-        return f"second site {self.vars['SITE2_HOST']} Ready, app installed from the shared copy, uninstalled, site deleted"
+        self.until(lambda: not self.get("siteapp", orphan), 120, what="SiteApp deleted along with its site")
+        jobs = sh(*self.kc, "-n", self.a.namespace, "get", "jobs", "-o", "name").split()
+        raced = [j for j in jobs if orphan[:40] in j and "uninstall" in j]
+        assert not raced, f"an uninstall Job ran against the site being deleted: {raced}"
+        return f"second site {self.vars['SITE2_HOST']} Ready, app installed from the shared copy, uninstalled, reinstalled, site deleted and its SiteApp with it"
 
     def load_token(self):
         """Reuse the SiteAPIKey Secret of an existing site (when --only skips 'access')."""

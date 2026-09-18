@@ -8,7 +8,7 @@
 apiVersion: vyogo.tech/v1
 kind: SiteApp
 metadata:
-  name: ${SITE}-two-vyogo-probe
+  name: ${SITE2_APP}
   namespace: ${NAMESPACE}
 spec:
   siteRef:
