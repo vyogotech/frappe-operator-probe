@@ -1,7 +1,10 @@
 apiVersion: vyogo.tech/v1
 kind: SiteMigration
 metadata:
-  name: ${SITE}-migrate-${RUN_ID}
+  # Deliberately long: with the site name and the operator's own prefix this
+  # exceeds the 63-byte label limit, which the operator must handle by hashing
+  # the Job name (it used to fail with "must be no more than 63 bytes").
+  name: ${SITE}-migrate-${RUN_ID}-long-enough-to-blow-the-job-name-label-limit
   namespace: ${NAMESPACE}
 spec:
   siteRef:

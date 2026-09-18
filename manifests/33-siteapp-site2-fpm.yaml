@@ -1,0 +1,21 @@
+# The SAME app installed on a SECOND site of the bench: the operator must
+# reuse the copy already on the shared volume (site-level install only, no
+# fetch, no copy). Re-copying under the first site raced with its imports
+# and left dangling asset links (ERPNext on the hub, 2026-09-18).
+# The same app, installed from an FPM package in an OCI registry instead of
+# git. The operator reads registry credentials from the optional Secret
+# `fpm-registry-auth` (keys username/token) in the site's namespace.
+apiVersion: vyogo.tech/v1
+kind: SiteApp
+metadata:
+  name: ${SITE}-two-vyogo-probe
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}-two
+  appName: vyogo_probe
+  fpmPackage: ${FPM_PACKAGE}
+  fpmRepo: ${FPM_REPO}
+  fpmRepoType: ${FPM_REPO_TYPE}
+  autoMigrate: true
+  backupBeforeInstall: false

@@ -141,9 +141,20 @@ class Probe:
         self.wait("frappesite", name, timeout=1200)
         self.until(lambda: self.curl("/api/method/ping", host=self.vars["SITE2_HOST"], auth=False).get("message") == "pong",
                    300, what="second site public ping")
+        # The same app on the second site: must reuse the shared-volume copy
+        # (site-level install only) and come up serving the app's API.
+        if self.a.app_source == "fpm":
+            self.apply("33-siteapp-site2-fpm.yaml", {"FPM_PACKAGE": self.a.fpm_package, "FPM_REPO": self.a.fpm_repo, "FPM_REPO_TYPE": self.a.fpm_repo_type})
+        else:
+            self.apply("32-siteapp-site2.yaml")
+        self.wait("siteapp", f"{name}-vyogo-probe", timeout=900)
+        self.until(lambda: self.curl("/api/method/vyogo_probe.api.echo_host", host=self.vars["SITE2_HOST"], auth=False).get("message", {}).get("site") == self.vars["SITE2_HOST"],
+                   300, what="probe app answering on the second site")
+        sh(*self.kc, "-n", self.a.namespace, "delete", "siteapp", f"{name}-vyogo-probe", "--wait=false")
+        self.until(lambda: not self.get("siteapp", f"{name}-vyogo-probe"), 600, what="second site app uninstall")
         sh(*self.kc, "-n", self.a.namespace, "delete", "frappesite", name, "--wait=false")
         self.until(lambda: not self.get("frappesite", name), 600, what="second site deletion (site-delete Job)")
-        return f"second site {self.vars['SITE2_HOST']} Ready and deleted with apps on the bench"
+        return f"second site {self.vars['SITE2_HOST']} Ready, app installed from the shared copy, uninstalled, site deleted"
 
     def load_token(self):
         """Reuse the SiteAPIKey Secret of an existing site (when --only skips 'access')."""
@@ -237,7 +248,7 @@ class Probe:
     def p_migration(self):
         before = self.status()["records"]["by_kind"].get("migrate", 0)
         self.apply("70-migration.yaml")
-        self.wait("sitemigration", f"{self.a.site}-migrate-{self.run_id}", timeout=900)
+        self.wait("sitemigration", f"{self.a.site}-migrate-{self.run_id}-long-enough-to-blow-the-job-name-label-limit", timeout=900)
         after = self.status()["records"]["by_kind"].get("migrate", 0)
         assert after > before, f"after_migrate did not run ({before}->{after})"
         return f"SiteMigration Succeeded, after_migrate records {before}->{after}"

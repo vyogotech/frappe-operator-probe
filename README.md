@@ -69,6 +69,8 @@ The kind-based e2e (`.github/workflows/e2e.yml`, git and FPM legs) then added:
 - `autoMigrate` never ran on the FPM install path (the branch exited before the migrate step)
 - a SiteDomain declared with `tls: {enabled: false}` still got `force-ssl-redirect` and an Ingress TLS section, so every plain-HTTP alias request was a 308 (invisible behind Cloudflare, which speaks HTTPS to the client). Two layers: the controller treated any `tls` block as on, and `enabled` was a plain bool with `omitempty` + CRD default `true`, so the finalizer Update dropped the `false` and the API server set it back to `true` (now a `*bool`, finalizer added by Patch)
 
+- installing an app on a second site of a shared bench re-fetched it and replaced the shared copy under the first site (rm -rf + cp raced with live imports, asset links left dangling); the operator now reuses the shared copy (phase `site2` installs and uninstalls the app on the second site)
+- a migration Job name longer than 63 bytes could never be created (the `migration` phase now uses a deliberately long name)
 - the site-init (and site-delete) Job had no `sites/apps` import path, so once a site on a bench had installed an app, every further site on that bench failed with "No module named '<app>'" (phase `site2` now creates and deletes a second site after the install)
 
 Both legs pass on release `08b0edc` (11 phases) and the `site2` phase was added for the fix after it.
