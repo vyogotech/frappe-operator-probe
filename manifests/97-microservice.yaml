@@ -1,0 +1,67 @@
+# FrappeMicroservice, one per workload type. All three reuse the bench image
+# (already in the cluster) and prove the site binding reaches the pod: the
+# Deployment serves FRAPPE_SITE on a routed path of the site's domain, and the
+# Job / CronJob log in to the site's database with the bound DB_* credentials.
+apiVersion: vyogo.tech/v1
+kind: FrappeMicroservice
+metadata:
+  name: ${SITE}-ms
+  namespace: ${NAMESPACE}
+spec:
+  siteRef:
+    name: ${SITE}
+  image:
+    repository: ${BENCH_IMAGE_REPO}
+    tag: ${BENCH_IMAGE_TAG}
+  command: ["sh", "-c"]
+  args:
+    - |
+      mkdir -p /tmp/www/probe-ms
+      echo ok > /tmp/www/health
+      echo "probe-ms ${PROBE_MARKER} site=$FRAPPE_SITE" > /tmp/www/probe-ms/index.html
+      cd /tmp/www && exec python3 -m http.server "$PORT"
+  deployment:
+    routing:
+      paths: ["/probe-ms"]
+---
+apiVersion: vyogo.tech/v1
+kind: FrappeMicroservice
+metadata:
+  name: ${SITE}-ms-job
+  namespace: ${NAMESPACE}
+spec:
+  type: Job
+  siteRef:
+    name: ${SITE}
+  image:
+    repository: ${BENCH_IMAGE_REPO}
+    tag: ${BENCH_IMAGE_TAG}
+  command: ["sh", "-c"]
+  args:
+    - mariadb --skip-ssl -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -N -e "select count(*) from tabUser"
+  job:
+    backoffLimit: 1
+    activeDeadlineSeconds: 300
+---
+apiVersion: vyogo.tech/v1
+kind: FrappeMicroservice
+metadata:
+  name: ${SITE}-ms-cron
+  namespace: ${NAMESPACE}
+spec:
+  type: CronJob
+  siteRef:
+    name: ${SITE}
+  image:
+    repository: ${BENCH_IMAGE_REPO}
+    tag: ${BENCH_IMAGE_TAG}
+  command: ["sh", "-c"]
+  args:
+    - mariadb --skip-ssl -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -N -e "select count(*) from tabUser"
+  cronJob:
+    schedule: "*/1 * * * *"
+    successfulJobsHistoryLimit: 1
+    failedJobsHistoryLimit: 1
+  job:
+    backoffLimit: 0
+    activeDeadlineSeconds: 120

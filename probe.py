@@ -312,6 +312,51 @@ class Probe:
             raise RuntimeError(f"{e}; last response from {self.vars['ALIAS_HOST']}: {json.dumps(last)[:300]}")
         return f"SiteDomain serves {r['message']['host']} for site {r['message']['site']}"
 
+    def p_benchpool(self):
+        if not sh(*self.kc, "get", "crd", "frappebenchpools.vyogo.tech", "-o", "name", check=False).strip():
+            return "skipped: this operator has no FrappeBenchPool CRD"
+        self.apply("12-benchpool.yaml")
+        pool = f"{self.a.bench}-pool"
+        shard = f"{self.a.bench}-shard-001"
+
+        def pool_ready():
+            st = self.get("frappebenchpool", pool).get("status", {})
+            return st if st.get("readyShards", 0) >= 1 else None
+
+        st = self.until(pool_ready, 1200, what="the pool's first shard to be Ready")
+        bench = self.get("frappebench", shard)
+        assert bench, f"pool did not create shard bench {shard}"
+        owners = [o for o in bench["metadata"].get("ownerReferences", []) if o.get("kind") == "FrappeBenchPool" and o.get("controller")]
+        assert owners and owners[0]["name"] == pool, f"shard {shard} is not controlled by pool {pool}: {bench['metadata'].get('ownerReferences')}"
+        assert bench["metadata"]["labels"].get("vyogo.tech/pool") == pool, bench["metadata"]["labels"]
+        assert st.get("totalShards") == 1, st
+        return f"pool stamped shard {shard} (owned, labelled), totalShards={st['totalShards']} readyShards={st['readyShards']}"
+
+    def p_microservice(self):
+        if not sh(*self.kc, "get", "crd", "frappemicroservices.vyogo.tech", "-o", "name", check=False).strip():
+            return "skipped: this operator has no FrappeMicroservice CRD"
+        self.apply("97-microservice.yaml")
+        site = self.a.site
+        self.wait("frappemicroservice", f"{site}-ms", timeout=600)
+        site_name = self.get("frappesite", site).get("spec", {}).get("siteName", "")
+        want = f"probe-ms {self.vars['PROBE_MARKER']} site={site_name}"
+        last = {}
+
+        def routed():
+            nonlocal last
+            last = self.curl("/probe-ms/", auth=False)
+            return want in last.get("_raw", "")
+
+        try:
+            self.until(routed, 300, what="the microservice path on the site domain")
+        except RuntimeError as e:
+            raise RuntimeError(f"{e}; last response: {json.dumps(last)[:300]}")
+        assert self.curl("/api/method/ping", auth=False).get("message") == "pong", "the monolith must still serve the rest of the domain"
+        self.wait("frappemicroservice", f"{site}-ms-job", timeout=600)
+        self.until(lambda: self.get("frappemicroservice", f"{site}-ms-cron").get("status", {}).get("lastSuccessfulTime"),
+                   300, what="a successful scheduled run")
+        return "Deployment routed on the site domain with the binding; Job and CronJob reached the site DB"
+
     def cleanup(self):
         sh(*self.kc, "delete", "namespace", self.a.namespace, "--wait=true", "--timeout=600s", check=False)
         # A Retain storage class leaves the bench volume behind as a Released PV
@@ -331,7 +376,7 @@ class Probe:
         if self.a.only and "access" not in self.a.only and self.load_token():
             print("using the existing SiteAPIKey token")
         for name, fn in (("bench", self.p_bench), ("site", self.p_site), ("access", self.p_access), ("siteapp", self.p_siteapp), ("site2", self.p_site2),
-                         ("config", self.p_config), ("content", self.p_content), ("seed", self.p_seed), ("cron", self.p_cron),
+                         ("config", self.p_config), ("content", self.p_content), ("seed", self.p_seed), ("cron", self.p_cron), ("benchpool", self.p_benchpool), ("microservice", self.p_microservice),
                          ("migration", self.p_migration), ("backup", self.p_backup_restore), ("domain", self.p_domain)):
             self.phase(name, fn)
         print("\n== summary ==")
