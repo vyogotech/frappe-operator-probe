@@ -312,6 +312,31 @@ class Probe:
             raise RuntimeError(f"{e}; last response from {self.vars['ALIAS_HOST']}: {json.dumps(last)[:300]}")
         return f"SiteDomain serves {r['message']['host']} for site {r['message']['site']}"
 
+    def p_microservice(self):
+        if not sh(*self.kc, "get", "crd", "frappemicroservices.vyogo.tech", "-o", "name", check=False).strip():
+            return "skipped: this operator has no FrappeMicroservice CRD"
+        self.apply("97-microservice.yaml")
+        site = self.a.site
+        self.wait("frappemicroservice", f"{site}-ms", timeout=600)
+        site_name = self.get("frappesite", site).get("spec", {}).get("siteName", "")
+        want = f"probe-ms {self.vars['PROBE_MARKER']} site={site_name}"
+        last = {}
+
+        def routed():
+            nonlocal last
+            last = self.curl("/probe-ms/", auth=False)
+            return want in last.get("_raw", "")
+
+        try:
+            self.until(routed, 300, what="the microservice path on the site domain")
+        except RuntimeError as e:
+            raise RuntimeError(f"{e}; last response: {json.dumps(last)[:300]}")
+        assert self.curl("/api/method/ping", auth=False).get("message") == "pong", "the monolith must still serve the rest of the domain"
+        self.wait("frappemicroservice", f"{site}-ms-job", timeout=600)
+        self.until(lambda: self.get("frappemicroservice", f"{site}-ms-cron").get("status", {}).get("lastSuccessfulTime"),
+                   300, what="a successful scheduled run")
+        return "Deployment routed on the site domain with the binding; Job and CronJob reached the site DB"
+
     def cleanup(self):
         sh(*self.kc, "delete", "namespace", self.a.namespace, "--wait=true", "--timeout=600s", check=False)
         # A Retain storage class leaves the bench volume behind as a Released PV
@@ -331,7 +356,7 @@ class Probe:
         if self.a.only and "access" not in self.a.only and self.load_token():
             print("using the existing SiteAPIKey token")
         for name, fn in (("bench", self.p_bench), ("site", self.p_site), ("access", self.p_access), ("siteapp", self.p_siteapp), ("site2", self.p_site2),
-                         ("config", self.p_config), ("content", self.p_content), ("seed", self.p_seed), ("cron", self.p_cron),
+                         ("config", self.p_config), ("content", self.p_content), ("seed", self.p_seed), ("cron", self.p_cron), ("microservice", self.p_microservice),
                          ("migration", self.p_migration), ("backup", self.p_backup_restore), ("domain", self.p_domain)):
             self.phase(name, fn)
         print("\n== summary ==")
