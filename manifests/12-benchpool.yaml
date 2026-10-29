@@ -1,0 +1,29 @@
+# A FrappeBenchPool with one shard and no warm buffer: the pool must stamp the
+# template onto a generated FrappeBench (named <prefix>-001), own it, and report
+# it Ready. maxShards 1 keeps the probe from provisioning more than one bench.
+apiVersion: vyogo.tech/v1
+kind: FrappeBenchPool
+metadata:
+  name: ${BENCH}-pool
+  namespace: ${NAMESPACE}
+spec:
+  frappeVersion: "${FRAPPE_VERSION}"
+  shardingPolicy:
+    minShards: 1
+    maxShards: 1
+    maxSitesPerShard: 5
+    watermarkPercent: 80
+    bufferWarmShards: 0
+    shardPrefix: ${BENCH}-shard
+  template:
+    frappeVersion: "${FRAPPE_VERSION}"
+    imageConfig:
+      repository: ${BENCH_IMAGE_REPO}
+      tag: ${BENCH_IMAGE_TAG}
+    storageSize: ${STORAGE_SIZE}
+    dbConfig:
+      provider: mariadb
+      mode: shared
+      mariadbRef:
+        name: ${MARIADB_NAME}
+        namespace: ${MARIADB_NAMESPACE}

@@ -19,6 +19,7 @@ each one actually did its job.
 | SiteUserPermission | permission scoped to a seeded record |
 | SiteCron | `*/2` job runs `vyogo_probe.tasks.tick`; a `cron` record appears |
 | SiteMigration | `after_migrate` hook leaves a `migrate` record |
+| FrappeBenchPool | one-shard pool (no warm buffer) stamps its template onto a generated bench `<prefix>-001`, owns and labels it, and reports it Ready. Skipped when the operator has no FrappeBenchPool CRD |
 | FrappeMicroservice | one per type, on the bench image: a Deployment routed at `/probe-ms` on the site domain serves the bound `FRAPPE_SITE`; a Job and a CronJob log in to the site DB with the bound `DB_*`. Skipped when the operator has no FrappeMicroservice CRD |
 | SiteBackup + SiteRestore | seed 25 records, back up, wipe, restore, checksum identical |
 | SiteDomain | alias host served by the same site |
